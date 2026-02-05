@@ -1,0 +1,9 @@
+
+{
+  "name": "Sentinel Agentic Honey-Pot",
+  "description": "Sophisticated AI-driven scam detection and intelligence extraction system for Problem Statement 2.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ]
+}
