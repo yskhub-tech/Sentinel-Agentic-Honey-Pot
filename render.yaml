@@ -1,2 +1,9 @@
-build = "npm install"
-start = "node server.js"
+services:
+  - type: web
+    name: sentinel-honeypot-api
+    env: node
+    buildCommand: npm install
+    startCommand: node server.js
+    envVars:
+      - key: NODE_ENV
+        value: production
