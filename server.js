@@ -1,30 +1,31 @@
-import express from 'express';
-import cors from 'cors';
-import dotenv from 'dotenv';
-
-dotenv.config();
+const express = require('express');
+const cors = require('cors');
+require('dotenv').config();
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Middleware
-app.use(cors());
+// CORS - allow ALL origins
+app.use(cors({
+    origin: '*',
+    methods: ['GET', 'POST', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'x-api-key']
+}));
+
+// Parse JSON
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Comprehensive request logger
+// Log every request
 app.use((req, res, next) => {
-    console.log('='.repeat(80));
-    console.log(`[${new Date().toISOString()}] ${req.method} ${req.path}`);
-    console.log('Headers:', JSON.stringify(req.headers, null, 2));
-    console.log('Body:', JSON.stringify(req.body, null, 2));
-    console.log('='.repeat(80));
+    console.log(`${new Date().toISOString()} - ${req.method} ${req.url}`);
+    console.log('Body:', req.body);
     next();
 });
 
-// Mock response generator
-function createResponse(text) {
-    const response = {
+// Mock response
+function getResponse(text) {
+    return {
         status: 'success',
         scamDetected: false,
         engagementMetrics: {
@@ -40,91 +41,47 @@ function createResponse(text) {
             scamTactics: [],
             emotionalManipulation: []
         },
-        agentNotes: `Successfully processed: "${text || 'empty'}"`,
-        nextResponse: "Thank you. Could you tell me more?",
+        agentNotes: `Processed: ${text}`,
+        nextResponse: "Tell me more",
         message: {
             sender: 'user',
-            text: "Thank you. Could you tell me more?",
+            text: "Tell me more",
             timestamp: new Date().toISOString()
         }
     };
-
-    console.log('[RESPONSE] Sending:', JSON.stringify(response, null, 2));
-    return response;
 }
 
-// Health endpoint
+// Health check
 app.get('/health', (req, res) => {
-    const health = {
-        status: 'healthy',
-        timestamp: new Date().toISOString(),
-        version: '3.0-debug'
-    };
-    console.log('[HEALTH] Response:', JSON.stringify(health));
-    res.json(health);
+    res.set('Content-Type', 'application/json');
+    res.json({ status: 'ok', time: new Date().toISOString() });
 });
 
-// Root POST endpoint  
+// Main API - ROOT
 app.post('/', (req, res) => {
-    console.log('[ROOT POST] Processing...');
-
-    try {
-        const { text, message } = req.body;
-        const inputText = message?.text || text || 'ping';
-
-        res.json(createResponse(inputText));
-    } catch (error) {
-        console.error('[ROOT ERROR]', error);
-        res.status(500).json({
-            status: 'error', message: 'Error: ' + error.message
-        });
-    }
+    console.log('[ROOT] Request received');
+    res.set('Content-Type', 'application/json');
+    const text = req.body.message?.text || req.body.text || 'hello';
+    res.json(getResponse(text));
 });
 
-// API honeypot endpoint
+// Main API - /api/honeypot
 app.post('/api/honeypot', (req, res) => {
-    console.log('[API] Processing...');
-
-    try {
-        const { text, message } = req.body;
-        const inputText = message?.text || text || 'ping';
-
-        res.json(createResponse(inputText));
-    } catch (error) {
-        console.error('[API ERROR]', error);
-        res.status(500).json({
-            status: 'error',
-            message: 'Error: ' + error.message
-        });
-    }
+    console.log('[API] Request received');
+    res.set('Content-Type', 'application/json');
+    const text = req.body.message?.text || req.body.text || 'hello';
+    res.json(getResponse(text));
 });
 
-// 404 handler
-app.use((req, res) => {
-    console.log('[404]', req.method, req.path);
-    res.status(404).json({
-        status: 'error',
-        message: 'Not found',
-        path: req.path
-    });
-});
-
-// Error handler
+// Catch errors
 app.use((err, req, res, next) => {
-    console.error('[FATAL]', err);
-    res.status(500).json({
-        status: 'error',
-        message: 'Fatal: ' + err.message
-    });
+    console.error('ERROR:', err);
+    res.set('Content-Type', 'application/json');
+    res.status(500).json({ status: 'error', message: err.message });
 });
 
-// Start
+// Start server
 app.listen(PORT, '0.0.0.0', () => {
-    console.log('='.repeat(80));
-    console.log(`[BOOT] Honeypot API v3.0 on port ${PORT}`);
-    console.log(`[BOOT] Time: ${new Date().toISOString()}`);
-    console.log('='.repeat(80));
+    console.log(`SERVER RUNNING ON PORT ${PORT}`);
+    console.log(`Time: ${new Date().toISOString()}`);
 });
-
-process.on('uncaughtException', (err) => console.error('[UNCAUGHT]', err));
-process.on('unhandledRejection', (err) => console.error('[UNHANDLED]', err));
