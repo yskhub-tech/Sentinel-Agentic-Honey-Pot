@@ -13,8 +13,74 @@ const __dirname = path.dirname(__filename);
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-const GEMINI_API_KEY = process.env.API_KEY;
+const GEMINI_API_KEY = process.env.API_KEY || process.env.GEMINI_API_KEY;
 const VALID_X_API_KEY = process.env.X_API_KEY || 'SENTINEL_SECURE_2026_X1';
+
+async function processWithGemini(conversationHistory, newMessage, metadata) {
+    if (!GEMINI_API_KEY) {
+        return {
+            scamDetected: false,
+            agentNotes: "Error: GEMINI_API_KEY is missing",
+            extractedIntelligence: { bankAccounts: [], upiIds: [], phishingLinks: [], phoneNumbers: [], suspiciousKeywords: [], scamTactics: [], emotionalManipulation: [] },
+            nextResponse: "I'm having trouble connecting to my brain right now. Can you repeat that?"
+        };
+    }
+
+    const genAI = new GoogleGenAI(GEMINI_API_KEY);
+    const model = genAI.getGenerativeModel({
+        model: "gemini-1.5-flash",
+        generationConfig: {
+            responseMimeType: "application/json",
+            responseSchema: {
+                type: "object",
+                properties: {
+                    scamDetected: { type: "boolean" },
+                    agentNotes: { type: "string" },
+                    extractedIntelligence: {
+                        type: "object",
+                        properties: {
+                            bankAccounts: { type: "array", items: { type: "string" } },
+                            upiIds: { type: "array", items: { type: "string" } },
+                            phishingLinks: { type: "array", items: { type: "string" } },
+                            phoneNumbers: { type: "array", items: { type: "string" } },
+                            suspiciousKeywords: { type: "array", items: { type: "string" } },
+                            scamTactics: { type: "array", items: { type: "string" } },
+                            emotionalManipulation: { type: "array", items: { type: "string" } }
+                        },
+                        required: ["bankAccounts", "upiIds", "phishingLinks", "phoneNumbers", "suspiciousKeywords", "scamTactics", "emotionalManipulation"]
+                    },
+                    nextResponse: { type: "string" }
+                },
+                required: ["scamDetected", "agentNotes", "extractedIntelligence", "nextResponse"]
+            }
+        },
+        systemInstruction: "You are 'SentinelTrap AI', an expert scam-baiting agent. Analyze scammer input and respond convincingly using the assigned persona to extract intelligence. Persona: Vulnerable but curious elderly person. Goal: Bait scammer into revealing Bank Accounts, UPI IDs, or Phishing Links. Always return JSON."
+    });
+
+    try {
+        const historyText = Array.isArray(conversationHistory)
+            ? conversationHistory.map(m => `${m.sender}: ${m.text}`).join("\n")
+            : "";
+
+        const prompt = `
+            History: ${historyText}
+            Scammer: ${newMessage.text}
+            Metadata: ${JSON.stringify(metadata || {})}
+        `;
+
+        const result = await model.generateContent(prompt);
+        const responseText = result.response.text();
+        return JSON.parse(responseText);
+    } catch (error) {
+        console.error("Gemini API Error:", error);
+        return {
+            scamDetected: false,
+            agentNotes: "API Error: " + error.message,
+            extractedIntelligence: { bankAccounts: [], upiIds: [], phishingLinks: [], phoneNumbers: [], suspiciousKeywords: [], scamTactics: [], emotionalManipulation: [] },
+            nextResponse: "I'm not sure I understand. What were you saying about the transaction?"
+        };
+    }
+}
 
 app.use(cors());
 app.use(express.json());
