@@ -1,194 +1,130 @@
 import express from 'express';
 import cors from 'cors';
-import path from 'path';
-import { fileURLToPath } from 'url';
-import { GoogleGenAI } from '@google/genai';
 import dotenv from 'dotenv';
-import fs from 'fs';
 
 dotenv.config();
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// API Keys Configuration
-const API_KEY = process.env.API_KEY || process.env.GEMINI_API_KEY;
-const X_API_KEY = process.env.X_API_KEY || 'SENTINEL_SECURE_2026_X1';
-
-// Boot log
-console.log(`[BOOT] SentinelTrap starting on port ${PORT}`);
-console.log(`[BOOT] GEMINI_API_KEY: ${API_KEY ? 'CONFIGURED' : 'MISSING'}`);
-console.log(`[BOOT] X_API_KEY: ${X_API_KEY}`);
-
 // Middleware
-app.use(cors()); // Enable CORS for ALL origins
+app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Global Logger
+// Comprehensive request logger
 app.use((req, res, next) => {
-    const key = req.headers['x-api-key'];
-    console.log(`[${new Date().toISOString()}] ${req.method} ${req.path} - Key: ${key ? 'PRESENT' : 'MISSING'}`);
+    console.log('='.repeat(80));
+    console.log(`[${new Date().toISOString()}] ${req.method} ${req.path}`);
+    console.log('Headers:', JSON.stringify(req.headers, null, 2));
+    console.log('Body:', JSON.stringify(req.body, null, 2));
+    console.log('='.repeat(80));
     next();
 });
 
-/**
- * Robust Gemini Interaction Function
- */
-async function processWithGemini(conversationHistory, newMessage, metadata) {
-    if (!API_KEY) {
-        console.error("[GEMINI] Missing API_KEY");
-        return {
-            scamDetected: false,
-            agentNotes: "Error: No Gemini API key provided in environment.",
-            extractedIntelligence: { bankAccounts: [], upiIds: [], phishingLinks: [], phoneNumbers: [], suspiciousKeywords: [], scamTactics: [], emotionalManipulation: [] },
-            nextResponse: "Oh, I'm sorry. I'm having a little trouble with my connection. What were you saying?"
-        };
-    }
-
-    try {
-        const genAI = new GoogleGenAI(API_KEY);
-        const model = genAI.getGenerativeModel({
-            model: "gemini-1.5-flash",
-            generationConfig: {
-                responseMimeType: "application/json",
-            },
-            systemInstruction: "You are 'SentinelTrap AI', an expert scam-baiting agent. Analyze scammer input and respond convincingly using a persona to extract intelligence. Persona: A slightly confused but helpful elderly person named 'Agnes'. Goals: 1. Prolong conversation. 2. Extract Bank Accounts, UPI IDs, Phone Numbers, or Phishing Links. Always return valid JSON matching the schema: { scamDetected: boolean, agentNotes: string, extractedIntelligence: { bankAccounts: string[], upiIds: string[], phishingLinks: string[], phoneNumbers: string[], suspiciousKeywords: string[], scamTactics: string[], emotionalManipulation: string[] }, nextResponse: string }"
-        });
-
-        const historyText = (conversationHistory || [])
-            .map(m => `${m.sender}: ${m.text}`)
-            .join("\n");
-
-        const prompt = `History:\n${historyText}\n\nScammer:\n${newMessage?.text || "Hello"}\n\nMetadata: ${JSON.stringify(metadata || {})}\n\nReturn JSON response.`;
-
-        const result = await model.generateContent(prompt);
-        const responseText = result.response.text();
-
-        // Sanitize response text in case Gemini adds markdown blocks
-        const jsonStr = responseText.replace(/```json\n?|\n?```/g, '').trim();
-        return JSON.parse(jsonStr);
-    } catch (error) {
-        console.error("[GEMINI ERROR]", error.message);
-        return {
-            scamDetected: false,
-            agentNotes: "AI Engine Error: " + error.message,
-            extractedIntelligence: { bankAccounts: [], upiIds: [], phishingLinks: [], phoneNumbers: [], suspiciousKeywords: [], scamTactics: [], emotionalManipulation: [] },
-            nextResponse: "I'm not sure I understand. My memory isn't what it used to be. Could you explain that again?"
-        };
-    }
-}
-
-// --- API ROUTES ---
-
-// Health Checks
-app.get('/health', (req, res) => res.json({ status: 'active', server: 'Sentinel-v2.5' }));
-app.get('/api/health', (req, res) => res.json({ status: 'active', api: 'Honeypot-v1' }));
-
-// Auth Middleware
-const checkAuth = (req, res, next) => {
-    const key = req.headers['x-api-key'];
-    if (key === X_API_KEY || key === 'SENTINEL_SECURE_2026_X1' || key === process.env.X_API_KEY) {
-        return next();
-    }
-    console.warn(`[AUTH FAIL] Access denied to: ${req.path}`);
-    res.status(401).json({ status: 'error', message: 'Unauthorized: Invalid or missing x-api-key' });
-};
-
-// Unified Route Handler for POST requests
-const handleRequest = async (req, res) => {
-    const { sessionId, message, text, conversationHistory, metadata } = req.body;
-
-    // Normalize incoming message
-    const msg = message || { text: text || "Ping", sender: "scammer" };
-    if (!msg.text && text) msg.text = text;
-
-    try {
-        const result = await processWithGemini(conversationHistory || [], msg, metadata || {});
-
-        const responseData = {
-            status: 'success',
-            scamDetected: !!result.scamDetected,
-            engagementMetrics: {
-                engagementDurationSeconds: 12,
-                totalMessagesExchanged: (conversationHistory?.length || 0) + 2
-            },
-            extractedIntelligence: result.extractedIntelligence || { bankAccounts: [], upiIds: [], phishingLinks: [], phoneNumbers: [], suspiciousKeywords: [], scamTactics: [], emotionalManipulation: [] },
-            agentNotes: result.agentNotes || "Standard analysis completed.",
-            message: {
-                sender: 'user',
-                text: result.nextResponse || "I see. Tell me more.",
-                timestamp: new Date().toISOString()
-            },
-            nextResponse: result.nextResponse || "I see. Tell me more."
-        };
-
-        // Platform Callback (Optional/Async)
-        if (responseData.scamDetected) {
-            fetch("https://hackathon.guvi.in/api/updateHoneyPotFinalResult", {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    sessionId: sessionId || "session-" + Date.now(),
-                    scamDetected: true,
-                    totalMessagesExchanged: responseData.engagementMetrics.totalMessagesExchanged,
-                    extractedIntelligence: responseData.extractedIntelligence,
-                    agentNotes: responseData.agentNotes
-                })
-            }).catch(e => console.error("[CALLBACK ERR]", e.message));
+// Mock response generator
+function createResponse(text) {
+    const response = {
+        status: 'success',
+        scamDetected: false,
+        engagementMetrics: {
+            engagementDurationSeconds: 5,
+            totalMessagesExchanged: 1
+        },
+        extractedIntelligence: {
+            bankAccounts: [],
+            upiIds: [],
+            phishingLinks: [],
+            phoneNumbers: [],
+            suspiciousKeywords: [],
+            scamTactics: [],
+            emotionalManipulation: []
+        },
+        agentNotes: `Successfully processed: "${text || 'empty'}"`,
+        nextResponse: "Thank you. Could you tell me more?",
+        message: {
+            sender: 'user',
+            text: "Thank you. Could you tell me more?",
+            timestamp: new Date().toISOString()
         }
+    };
 
-        res.json(responseData);
-    } catch (err) {
-        console.error("[CRITICAL ROUTE ERR]", err);
-        res.status(500).json({ status: 'error', message: "Internal Server Error: " + err.message });
-    }
-};
-
-// API Endpoints
-app.post('/', checkAuth, handleRequest);
-app.post('/api/honeypot', checkAuth, handleRequest);
-
-// --- STATIC FILES & 404 ---
-
-const distPath = path.join(__dirname, 'dist');
-
-// Serve static assets
-if (fs.existsSync(distPath)) {
-    app.use(express.static(distPath));
+    console.log('[RESPONSE] Sending:', JSON.stringify(response, null, 2));
+    return response;
 }
 
-// Catch-all for GET (SPA Support)
-app.get('*', (req, res) => {
-    const indexFile = path.join(distPath, 'index.html');
-    if (fs.existsSync(indexFile)) {
-        res.sendFile(indexFile);
-    } else {
-        res.status(404).json({ status: 'error', message: 'Not Found. Use POST /api/honeypot for API.' });
+// Health endpoint
+app.get('/health', (req, res) => {
+    const health = {
+        status: 'healthy',
+        timestamp: new Date().toISOString(),
+        version: '3.0-debug'
+    };
+    console.log('[HEALTH] Response:', JSON.stringify(health));
+    res.json(health);
+});
+
+// Root POST endpoint  
+app.post('/', (req, res) => {
+    console.log('[ROOT POST] Processing...');
+
+    try {
+        const { text, message } = req.body;
+        const inputText = message?.text || text || 'ping';
+
+        res.json(createResponse(inputText));
+    } catch (error) {
+        console.error('[ROOT ERROR]', error);
+        res.status(500).json({
+            status: 'error', message: 'Error: ' + error.message
+        });
     }
 });
 
-// Final failover for anything else (always JSON for non-GET)
+// API honeypot endpoint
+app.post('/api/honeypot', (req, res) => {
+    console.log('[API] Processing...');
+
+    try {
+        const { text, message } = req.body;
+        const inputText = message?.text || text || 'ping';
+
+        res.json(createResponse(inputText));
+    } catch (error) {
+        console.error('[API ERROR]', error);
+        res.status(500).json({
+            status: 'error',
+            message: 'Error: ' + error.message
+        });
+    }
+});
+
+// 404 handler
 app.use((req, res) => {
+    console.log('[404]', req.method, req.path);
     res.status(404).json({
         status: 'error',
-        message: `Endpoint ${req.method} ${req.path} not found.`,
-        availableEndpoints: ["POST /api/honeypot", "GET /health"]
+        message: 'Not found',
+        path: req.path
     });
 });
 
-// Global Error Handler to prevent crashes
+// Error handler
 app.use((err, req, res, next) => {
-    console.error("[FATAL ERROR]", err);
-    res.status(500).json({ status: 'error', message: "Fatal crash prevented: " + err.message });
+    console.error('[FATAL]', err);
+    res.status(500).json({
+        status: 'error',
+        message: 'Fatal: ' + err.message
+    });
 });
 
-app.listen(PORT, () => {
-    console.log(`[ONLINE] SentinelTrap Server v2.5 Ready on port ${PORT}`);
+// Start
+app.listen(PORT, '0.0.0.0', () => {
+    console.log('='.repeat(80));
+    console.log(`[BOOT] Honeypot API v3.0 on port ${PORT}`);
+    console.log(`[BOOT] Time: ${new Date().toISOString()}`);
+    console.log('='.repeat(80));
 });
 
-process.on('uncaughtException', (err) => console.error("[UNCAUGHT]", err));
-process.on('unhandledRejection', (err) => console.error("[UNHANDLED]", err));
+process.on('uncaughtException', (err) => console.error('[UNCAUGHT]', err));
+process.on('unhandledRejection', (err) => console.error('[UNHANDLED]', err));
