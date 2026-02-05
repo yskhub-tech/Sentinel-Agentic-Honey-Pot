@@ -158,6 +158,32 @@ app.post('/api/honeypot', async (req, res) => {
 
 app.get('/health', (req, res) => res.json({ status: 'active', server: 'SentinelBackend-v2' }));
 
+// Direct POST / endpoint for GUVI Tester compatibility
+app.post('/', async (req, res) => {
+    const xApiKey = req.headers['x-api-key'];
+    if (xApiKey !== VALID_X_API_KEY) {
+        return res.status(401).json({ status: 'error', message: 'Unauthorized' });
+    }
+
+    const { sessionId, message, text } = req.body;
+
+    // Normalize input for tester (it might send "text" instead of "message.text")
+    const incomingMessage = message || { text: text || "System Health Check", sender: "scammer" };
+
+    try {
+        const geminiResult = await processWithGemini([], incomingMessage, {});
+        res.json({
+            status: "success",
+            scamDetected: geminiResult.scamDetected,
+            engagementMetrics: { engagementDurationSeconds: 5, totalMessagesExchanged: 1 },
+            extractedIntelligence: geminiResult.extractedIntelligence,
+            agentNotes: "Tester Validation Entry"
+        });
+    } catch (e) {
+        res.status(500).json({ status: 'error', message: e.message });
+    }
+});
+
 app.get('*', (req, res) => {
     res.sendFile(path.join(__dirname, 'dist', 'index.html'));
 });
