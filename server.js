@@ -217,19 +217,22 @@ if (fs.existsSync(distPath)) {
     app.use(express.static(distPath));
 }
 
-// Fallback for unknown GET routes (Serve frontend if exists, else JSON)
-app.get('*', (req, res) => {
-    const indexFile = path.join(distPath, 'index.html');
-    if (fs.existsSync(indexFile)) {
-        res.sendFile(indexFile);
-    } else {
-        res.status(404).json({ status: 'error', message: 'Endpoint not found. Use POST /api/honeypot or POST /' });
+// Fallback handler for all other requests
+app.use((req, res) => {
+    // If it's a GET request, try serving index.html (SPA support)
+    if (req.method === 'GET') {
+        const indexFile = path.join(distPath, 'index.html');
+        if (fs.existsSync(indexFile)) {
+            return res.sendFile(indexFile);
+        }
     }
-});
 
-// Explicit handle for other methods on unknown routes
-app.all('*', (req, res) => {
-    res.status(404).json({ status: 'error', message: `Route ${req.method} ${req.path} not found.` });
+    // Otherwise, return JSON 404
+    res.status(404).json({
+        status: 'error',
+        message: `Route ${req.method} ${req.path} not found.`,
+        suggestion: 'Use POST /api/honeypot for the main API.'
+    });
 });
 
 app.listen(PORT, () => {
