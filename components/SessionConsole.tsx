@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { HoneyPotSession, Message, PersonaType, EngagementStrategy } from '../types';
-import { processScamMessage } from '../services/gemini';
+import { processScamMessage } from '../services/api';
 
 interface SessionConsoleProps {
   session: HoneyPotSession;
@@ -41,7 +41,7 @@ const SessionConsole: React.FC<SessionConsoleProps> = ({ session, onUpdate, onFi
       status: 'active' as const,
       conversationHistory: [...session.conversationHistory, newScammerMsg]
     };
-    
+
     onUpdate(updatedSession);
     setInputText('');
     setIsProcessing(true);
@@ -76,10 +76,10 @@ const SessionConsole: React.FC<SessionConsoleProps> = ({ session, onUpdate, onFi
         },
         conversationHistory: [...updatedSession.conversationHistory, newUserMsg]
       };
-      
+
       onUpdate(finalUpdate);
     }
-    
+
     setIsProcessing(false);
   };
 
@@ -96,8 +96,8 @@ const SessionConsole: React.FC<SessionConsoleProps> = ({ session, onUpdate, onFi
           <h3 className="font-bold text-slate-100 text-sm tracking-tight uppercase">Conversation Hub</h3>
         </div>
         <div className="flex gap-2">
-          <select 
-            value={session.persona} 
+          <select
+            value={session.persona}
             onChange={(e) => updateConfig('persona', e.target.value as PersonaType)}
             className="bg-slate-950 text-[10px] font-bold text-slate-400 border border-slate-800 rounded-lg px-2 py-1 focus:outline-none focus:border-blue-500"
           >
@@ -106,7 +106,7 @@ const SessionConsole: React.FC<SessionConsoleProps> = ({ session, onUpdate, onFi
             <option>Job Seeker</option>
             <option>Small Business Owner</option>
           </select>
-          <button 
+          <button
             onClick={() => onFinalize(session)}
             className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all shadow-lg shadow-blue-600/20"
           >
@@ -125,7 +125,7 @@ const SessionConsole: React.FC<SessionConsoleProps> = ({ session, onUpdate, onFi
             <p className="text-xs font-black uppercase tracking-[0.2em] text-slate-500">Scanning Signal...</p>
           </div>
         )}
-        
+
         {session.conversationHistory.map((msg, i) => (
           <div key={i} className={`flex flex-col animate-in fade-in duration-300`}>
             <div className="flex items-center gap-2 mb-2">
@@ -136,16 +136,15 @@ const SessionConsole: React.FC<SessionConsoleProps> = ({ session, onUpdate, onFi
                 {new Date(msg.timestamp).toLocaleTimeString([], { hour12: false })}
               </span>
             </div>
-            <div className={`p-4 rounded-2xl text-sm leading-relaxed ${
-              msg.sender === 'scammer' 
-                ? 'bg-slate-800 text-slate-100 border border-slate-700' 
+            <div className={`p-4 rounded-2xl text-sm leading-relaxed ${msg.sender === 'scammer'
+                ? 'bg-slate-800 text-slate-100 border border-slate-700'
                 : 'bg-slate-700 text-slate-100 border border-slate-600'
-            }`}>
+              }`}>
               {msg.text}
             </div>
           </div>
         ))}
-        
+
         {isProcessing && (
           <div className="flex flex-col gap-2">
             <span className="text-[10px] font-black uppercase tracking-widest text-blue-400">Agent</span>
@@ -161,7 +160,7 @@ const SessionConsole: React.FC<SessionConsoleProps> = ({ session, onUpdate, onFi
       <div className="p-6 bg-slate-950/80 border-t border-slate-800">
         <div className="flex gap-4 mb-4 overflow-x-auto pb-2 custom-scrollbar">
           {PRESET_SCRIPTS.map((script, i) => (
-            <button 
+            <button
               key={i}
               onClick={() => handleSend(script.text)}
               className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-400 text-[10px] font-bold rounded-lg border border-slate-700 transition-colors whitespace-nowrap"
@@ -171,15 +170,15 @@ const SessionConsole: React.FC<SessionConsoleProps> = ({ session, onUpdate, onFi
           ))}
         </div>
         <div className="flex gap-4">
-          <input 
-            type="text" 
+          <input
+            type="text"
             value={inputText}
             onChange={(e) => setInputText(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleSend()}
             placeholder="Input Scammer Message..."
             className="flex-1 bg-slate-900 border border-slate-800 rounded-2xl px-6 py-4 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all text-slate-100 placeholder:text-slate-600"
           />
-          <button 
+          <button
             onClick={() => handleSend()}
             disabled={isProcessing}
             className="bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white w-14 rounded-2xl transition-all shadow-lg shadow-blue-600/30 flex items-center justify-center border border-blue-400/20"

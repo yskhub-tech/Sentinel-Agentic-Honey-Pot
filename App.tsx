@@ -3,7 +3,7 @@ import { HoneyPotSession, Message, ApiResponse } from './types';
 import Dashboard from './components/Dashboard';
 import SessionConsole from './components/SessionConsole';
 import IntelligenceVault from './components/IntelligenceVault';
-import { APP_SECRET_KEY, processScamMessage } from './services/gemini';
+import { APP_SECRET_KEY, processScamMessage } from './services/api';
 
 const INITIAL_SESSION: HoneyPotSession = {
   sessionId: `ST-${Math.random().toString(36).substr(2, 6).toUpperCase()}`,
@@ -31,12 +31,12 @@ const App: React.FC = () => {
   const [currentSession, setCurrentSession] = useState<HoneyPotSession>(INITIAL_SESSION);
   const [view, setView] = useState<'dashboard' | 'console' | 'dev-portal'>('dev-portal');
   const [isReporting, setIsReporting] = useState(false);
-  const [testLogs, setTestLogs] = useState<{msg: string, status: 'pass' | 'fail' | 'info'}[]>([]);
+  const [testLogs, setTestLogs] = useState<{ msg: string, status: 'pass' | 'fail' | 'info' }[]>([]);
   const [isTesting, setIsTesting] = useState(false);
   const [readinessScore, setReadinessScore] = useState(0);
   const [lastResponse, setLastResponse] = useState<ApiResponse | null>(null);
   const [gatewayStatus, setGatewayStatus] = useState<'offline' | 'active'>('offline');
-  
+
   // Submission Metadata - Dynamically detect origin for Cloud Run compatibility
   const [submissionUrl, setSubmissionUrl] = useState(window.location.origin);
   const [platformKey, setPlatformKey] = useState("SENTINEL_SECURE_2026_X1");
@@ -59,7 +59,7 @@ const App: React.FC = () => {
       if (event.data && event.data.type === 'API_REQUEST') {
         const { payload } = event.data;
         const incomingText = payload.message?.text || payload.text || "Hello";
-        
+
         const mockMsg: Message = {
           sender: 'scammer',
           text: incomingText,
@@ -67,7 +67,7 @@ const App: React.FC = () => {
         };
 
         const result = await processScamMessage(currentSession, mockMsg);
-        
+
         if (event.ports && event.ports[0]) {
           event.ports[0].postMessage(result);
         }
@@ -88,7 +88,7 @@ const App: React.FC = () => {
   const triggerRealApiTest = async () => {
     setIsTesting(true);
     setTestLogs(prev => [{ msg: "Verifying Edge Gateway (sw.js)...", status: 'info' }, ...prev]);
-    
+
     try {
       const response = await fetch('/api/honeypot', {
         method: 'POST',
@@ -128,25 +128,25 @@ const App: React.FC = () => {
         extractedIntelligence: session.extractedIntelligence,
         agentNotes: session.agentNotes
       };
-      
+
       const response = await fetch("https://hackathon.guvi.in/api/updateHoneyPotFinalResult", {
         method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json', 
-          'x-api-key': platformKey 
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': platformKey
         },
         body: JSON.stringify(payload)
       });
-      
+
       if (response.ok) {
         alert("Success: Evaluation data submitted to platform.");
       } else {
         alert("Platform submission failed. Check x-api-key.");
       }
-    } catch (err) { 
-      alert("Submission Error: Check your internet connection."); 
-    } finally { 
-      setIsReporting(false); 
+    } catch (err) {
+      alert("Submission Error: Check your internet connection.");
+    } finally {
+      setIsReporting(false);
     }
   };
 
@@ -214,18 +214,18 @@ const App: React.FC = () => {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-10">
                 <div className="bg-slate-950/50 border border-slate-800 rounded-2xl p-6">
                   <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2 block">Submission URL</label>
-                  <input 
-                    type="text" 
-                    value={submissionUrl} 
+                  <input
+                    type="text"
+                    value={submissionUrl}
                     onChange={(e) => setSubmissionUrl(e.target.value)}
                     className="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-xs font-mono text-blue-400 focus:outline-none focus:border-blue-500 transition-colors"
                   />
                 </div>
                 <div className="bg-slate-950/50 border border-slate-800 rounded-2xl p-6">
                   <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2 block">Platform API Key (x-api-key)</label>
-                  <input 
-                    type="text" 
-                    value={platformKey} 
+                  <input
+                    type="text"
+                    value={platformKey}
                     onChange={(e) => setPlatformKey(e.target.value)}
                     className="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-xs font-mono text-emerald-400 focus:outline-none focus:border-emerald-500 transition-colors"
                   />
@@ -234,41 +234,41 @@ const App: React.FC = () => {
 
               <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
                 <div className="space-y-6">
-                   <div className="bg-slate-950 border border-slate-800 rounded-2xl p-6">
-                      <div className="flex justify-between items-center mb-4">
-                        <h4 className="text-xs font-bold text-slate-100 uppercase flex items-center gap-2">
-                           <i className="fas fa-terminal text-blue-500"></i> Verification Terminal
-                        </h4>
-                        <button onClick={copyCurl} className="text-[9px] font-black text-blue-400 uppercase hover:text-blue-300">Copy Curl</button>
-                      </div>
-                      <div className="bg-black/50 p-4 rounded-xl font-mono text-[10px] space-y-2 h-[200px] overflow-y-auto mb-4 border border-slate-900">
-                        {testLogs.map((log, i) => (
-                          <div key={i} className={`flex gap-3 ${log.status === 'pass' ? 'text-emerald-400' : log.status === 'fail' ? 'text-red-400' : 'text-blue-400'}`}>
-                            <span>[{log.status.toUpperCase()}]</span>
-                            <span>{log.msg}</span>
-                          </div>
-                        ))}
-                        {testLogs.length === 0 && <div className="text-slate-700 italic text-center py-10">Trigger a test to verify the Agentic engine.</div>}
-                      </div>
-                      <div className="grid grid-cols-2 gap-4">
-                        <button 
-                          onClick={triggerRealApiTest} 
-                          disabled={isTesting} 
-                          className="bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white py-4 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all shadow-lg shadow-emerald-600/20"
-                        >
-                          {isTesting ? 'Testing...' : 'Test Gateway API'}
-                        </button>
-                        <button 
-                          onClick={() => handleFinalize(currentSession)}
-                          className="bg-blue-600 hover:bg-blue-500 text-white py-4 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all shadow-lg shadow-blue-600/20"
-                        >
-                          Submit Report
-                        </button>
-                      </div>
-                   </div>
-                   <div className="bg-blue-900/10 border border-blue-500/20 p-4 rounded-xl">
-                      <p className="text-[10px] text-blue-400 italic">Note: The Edge Gateway (Service Worker) must have the app tab open to process requests. Ensure the tab is active during judging.</p>
-                   </div>
+                  <div className="bg-slate-950 border border-slate-800 rounded-2xl p-6">
+                    <div className="flex justify-between items-center mb-4">
+                      <h4 className="text-xs font-bold text-slate-100 uppercase flex items-center gap-2">
+                        <i className="fas fa-terminal text-blue-500"></i> Verification Terminal
+                      </h4>
+                      <button onClick={copyCurl} className="text-[9px] font-black text-blue-400 uppercase hover:text-blue-300">Copy Curl</button>
+                    </div>
+                    <div className="bg-black/50 p-4 rounded-xl font-mono text-[10px] space-y-2 h-[200px] overflow-y-auto mb-4 border border-slate-900">
+                      {testLogs.map((log, i) => (
+                        <div key={i} className={`flex gap-3 ${log.status === 'pass' ? 'text-emerald-400' : log.status === 'fail' ? 'text-red-400' : 'text-blue-400'}`}>
+                          <span>[{log.status.toUpperCase()}]</span>
+                          <span>{log.msg}</span>
+                        </div>
+                      ))}
+                      {testLogs.length === 0 && <div className="text-slate-700 italic text-center py-10">Trigger a test to verify the Agentic engine.</div>}
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <button
+                        onClick={triggerRealApiTest}
+                        disabled={isTesting}
+                        className="bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white py-4 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all shadow-lg shadow-emerald-600/20"
+                      >
+                        {isTesting ? 'Testing...' : 'Test Gateway API'}
+                      </button>
+                      <button
+                        onClick={() => handleFinalize(currentSession)}
+                        className="bg-blue-600 hover:bg-blue-500 text-white py-4 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all shadow-lg shadow-blue-600/20"
+                      >
+                        Submit Report
+                      </button>
+                    </div>
+                  </div>
+                  <div className="bg-blue-900/10 border border-blue-500/20 p-4 rounded-xl">
+                    <p className="text-[10px] text-blue-400 italic">Note: The Edge Gateway (Service Worker) must have the app tab open to process requests. Ensure the tab is active during judging.</p>
+                  </div>
                 </div>
 
                 <div className="bg-slate-950 border border-slate-800 rounded-2xl p-6 flex flex-col">

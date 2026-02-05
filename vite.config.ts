@@ -5,11 +5,11 @@ export default defineConfig(({ mode }) => {
   // Load env file based on `mode` in the current working directory.
   // Set the third parameter to '' to load all env vars regardless of prefix.
   const env = loadEnv(mode, process.cwd(), '');
-  
+
   return {
     plugins: [react()],
     define: {
-      'process.env.API_KEY': JSON.stringify(env.API_KEY),
+      // API Key is now handled securely by the backend
     },
     build: {
       outDir: 'dist',
